@@ -104,6 +104,8 @@ typedef struct texture
     
     BOOL          _renderTargetsNeedResize;
     BOOL          _historyNeedsInit;
+    BOOL          _usesCustomOutputViewport;
+    MTLViewport   _customOutputViewport;
     
     CGRect _sourceRect;
     CGSize _aspectSize;
@@ -406,7 +408,7 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
 
 - (void)OE_resize {
     NSRect bounds = FitAspectRectIntoRect(_aspectSize, _drawableSize);
-    if (CGPointEqualToPoint(_outputBounds.origin, bounds.origin) && CGSizeEqualToSize(_outputBounds.size, bounds.size)) {
+    if (CGPointEqualToPoint(_outputBounds.origin, bounds.origin) && CGSizeEqualToSize(_outputBounds.size, bounds.size) && !_usesCustomOutputViewport) {
         return;
     }
     
@@ -425,6 +427,14 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
     _outputFrame.outputSize.y     = size.height;
     _outputFrame.outputSize.z     = 1.0f / size.width;
     _outputFrame.outputSize.w     = 1.0f / size.height;
+
+    if (_usesCustomOutputViewport) {
+        _outputFrame.viewport = _customOutputViewport;
+        _outputFrame.outputSize.x = _customOutputViewport.width;
+        _outputFrame.outputSize.y = _customOutputViewport.height;
+        _outputFrame.outputSize.z = _customOutputViewport.width > 0.0 ? 1.0f / _customOutputViewport.width : 0.0f;
+        _outputFrame.outputSize.w = _customOutputViewport.height > 0.0 ? 1.0f / _customOutputViewport.height : 0.0f;
+    }
     
     if (_shader) {
         _renderTargetsNeedResize = YES;
@@ -451,6 +461,28 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
     }
     
     _drawableSize = size;
+    [self OE_resize];
+}
+
+- (void)setOutputViewport:(MTLViewport)viewport
+{
+    _usesCustomOutputViewport = YES;
+    _customOutputViewport = viewport;
+    _outputFrame.viewport = viewport;
+    _outputFrame.outputSize.x = viewport.width;
+    _outputFrame.outputSize.y = viewport.height;
+    _outputFrame.outputSize.z = viewport.width > 0.0 ? 1.0f / viewport.width : 0.0f;
+    _outputFrame.outputSize.w = viewport.height > 0.0 ? 1.0f / viewport.height : 0.0f;
+    _renderTargetsNeedResize = YES;
+}
+
+- (void)resetOutputViewport
+{
+    if (!_usesCustomOutputViewport) {
+        return;
+    }
+    _usesCustomOutputViewport = NO;
+    _outputBounds = NSZeroRect;
     [self OE_resize];
 }
 

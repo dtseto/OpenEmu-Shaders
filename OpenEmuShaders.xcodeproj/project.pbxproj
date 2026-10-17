@@ -1142,6 +1142,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
+				MACOSX_DEPLOYMENT_TARGET = 12;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1153,6 +1154,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				MACOSX_DEPLOYMENT_TARGET = 12;
 				OTHER_CFLAGS = "";
 				OTHER_LDFLAGS = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1306,6 +1308,7 @@
 					"$(PROJECT_DIR)/3rdparty/SPIRV-Tools/build/source",
 					"$(PROJECT_DIR)/3rdparty/SPIRV-Tools/build/source/opt",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 12;
 				MARKETING_VERSION = 1.13;
 				PRODUCT_BUNDLE_IDENTIFIER = org.openemu.OpenEmuShaders;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
@@ -1341,6 +1344,7 @@
 					"$(PROJECT_DIR)/3rdparty/SPIRV-Tools/build/source",
 					"$(PROJECT_DIR)/3rdparty/SPIRV-Tools/build/source/opt",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 12;
 				MARKETING_VERSION = 1.13;
 				PRODUCT_BUNDLE_IDENTIFIER = org.openemu.OpenEmuShaders;
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
@@ -1365,7 +1369,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12;
 				PRODUCT_BUNDLE_IDENTIFIER = org.openemu.OpenEmuShadersTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1390,7 +1394,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 10.15;
+				MACOSX_DEPLOYMENT_TARGET = 12;
 				PRODUCT_BUNDLE_IDENTIFIER = org.openemu.OpenEmuShadersTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

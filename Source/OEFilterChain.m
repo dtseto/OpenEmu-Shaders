@@ -32,6 +32,52 @@
 #import <OpenEmuShaders/OpenEmuShaders.h>
 #import <CoreImage/CoreImage.h>
 #import <OpenEmuShaders/OpenEmuShaders-Swift.h>
+#include <stdlib.h>
+
+static const char *OEFilterChainScaleName(OEShaderPassScale scale)
+{
+    switch (scale) {
+        case OEShaderPassScaleSource:
+            return "source";
+        case OEShaderPassScaleViewport:
+            return "viewport";
+        case OEShaderPassScaleAbsolute:
+            return "absolute";
+        default:
+            return "unspecified";
+    }
+}
+
+// BOXER-FORK: NSLog mirror for shader diagnostics; safe per Phase 1.
+static void BXShaderDiagLog(NSString *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:args];
+    va_end(args);
+    NSLog(@"[BoxerShaderDiag] %@", msg);
+}
+
+// BOXER-FORK: format names for shader diagnostics.
+static NSString *BXPixelFormatName(MTLPixelFormat format)
+{
+    switch (format) {
+        case MTLPixelFormatInvalid:
+            return @"Invalid";
+        case MTLPixelFormatBGRA8Unorm:
+            return @"BGRA8Unorm";
+        case MTLPixelFormatBGRA8Unorm_sRGB:
+            return @"BGRA8Unorm_sRGB";
+        case MTLPixelFormatRGBA8Unorm:
+            return @"RGBA8Unorm";
+        case MTLPixelFormatRGBA8Unorm_sRGB:
+            return @"RGBA8Unorm_sRGB";
+        case MTLPixelFormatRGBA16Float:
+            return @"RGBA16Float";
+        default:
+            return [NSString stringWithFormat:@"MTLPixelFormat(%lu)", (unsigned long)format];
+    }
+}
 
 #define MTLALIGN(x) __attribute__((aligned(x)))
 
@@ -124,6 +170,7 @@ typedef struct texture
     
     // device behavior
     BOOL _deviceUnifiedMemory;
+    BOOL _diagnosticPending;
 }
 
 - (instancetype)initWithDevice:(id<MTLDevice>)device
@@ -461,6 +508,7 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
     }
     
     _drawableSize = size;
+    _diagnosticPending = YES;
     [self OE_resize];
 }
 
@@ -709,6 +757,7 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
 - (void)renderOffscreenPassesWithCommandBuffer:(id<MTLCommandBuffer>)commandBuffer
 {
     [self OE_prepareNextFrameWithCommandBuffer:commandBuffer];
+    [self OE_logResolvedDimensionsIfNeeded];
     [self OE_updateBuffersForPasses];
     
     if (!_shader || _passCount == 0) {
@@ -812,6 +861,41 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
     }
 }
 
+- (void)OE_logResolvedDimensionsIfNeeded
+{
+    if (!_diagnosticPending || getenv("OE_FILTER_CHAIN_DIAGNOSTICS") == NULL) {
+        return;
+    }
+    _diagnosticPending = NO;
+
+    os_log_info(OE_LOG_DEFAULT,
+                "filter diagnostics: drawable %.0fx%.0f output viewport (%.0f, %.0f) %.0fx%.0f, passes %lu",
+                _drawableSize.width,
+                _drawableSize.height,
+                _outputFrame.viewport.originX,
+                _outputFrame.viewport.originY,
+                _outputFrame.viewport.width,
+                _outputFrame.viewport.height,
+                (unsigned long)_passCount);
+
+    for (NSUInteger i = 0; i < _passCount; i++) {
+        ShaderPass *pass = _shader.passes[i];
+        id<MTLTexture> target = _pass[i].renderTarget.view;
+        os_log_info(OE_LOG_DEFAULT,
+                    "filter diagnostics: pass %lu scaleX=%{public}s scaleY=%{public}s viewport (%.0f, %.0f) %.0fx%.0f target %.0fx%.0f%@",
+                    (unsigned long)i,
+                    OEFilterChainScaleName(pass.scaleX),
+                    OEFilterChainScaleName(pass.scaleY),
+                    _pass[i].viewport.originX,
+                    _pass[i].viewport.originY,
+                    _pass[i].viewport.width,
+                    _pass[i].viewport.height,
+                    _pass[i].renderTarget.viewSize.x,
+                    _pass[i].renderTarget.viewSize.y,
+                    target == nil ? @" (direct/final)" : @"");
+    }
+}
+
 - (void)OE_resizeRenderTargets
 {
     if (!_shader || !_renderTargetsNeedResize) return;
@@ -864,7 +948,8 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
                     break;
                 
                 case OEShaderPassScaleAbsolute:
-                    height = (NSInteger)pass.size.width;
+                    // BOXER-FORK: absolute-Y scale must read height, not width.
+                    height = (NSInteger)pass.size.height;
                     break;
                 
                 default:
@@ -948,6 +1033,7 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
 - (BOOL)setShaderFromURL:(NSURL *)url error:(NSError **)error
 {
     os_log_debug(OE_LOG_DEFAULT, "loading shader from '%{public}s'", url.fileSystemRepresentation);
+    _diagnosticPending = YES;
     
     [self OE_freeShaderResources];
 
@@ -1074,6 +1160,8 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
                     if (lib == nil) {
                         save_msl = YES;
                         os_log_error(OE_LOG_DEFAULT, "unable to compile vertex shader: %{public}@", err.localizedDescription);
+                        // BOXER-FORK: mirror os_log shader-failure diagnostics to NSLog for interactive debugging.
+                        BXShaderDiagLog(@"unable to compile vertex shader: %@", err.localizedDescription);
                         return NO;
                     }
 #if DEBUG_SHADER
@@ -1088,6 +1176,8 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
                     if (lib == nil) {
                         save_msl = YES;
                         os_log_error(OE_LOG_DEFAULT, "unable to compile fragment shader: %{public}@", err.localizedDescription);
+                        // BOXER-FORK: mirror os_log shader-failure diagnostics to NSLog for interactive debugging.
+                        BXShaderDiagLog(@"unable to compile fragment shader: %@", err.localizedDescription);
                         return NO;
                     }
 #if DEBUG_SHADER
@@ -1100,6 +1190,13 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
                 if (err != nil) {
                     save_msl = YES;
                     os_log_error(OE_LOG_DEFAULT, "error creating pipeline state for pass %d: %{public}@", i, err.localizedDescription);
+                    // BOXER-FORK: mirror os_log shader-failure diagnostics to NSLog for interactive debugging.
+                    BXShaderDiagLog(@"error creating pipeline state for pass %d: %@", i, err.localizedDescription);
+                    return NO;
+                }
+                // BOXER-FORK: Metal can return nil state without populating err.
+                if (err == nil && _pass[i].state == nil) {
+                    BXShaderDiagLog(@"pipeline state nil for pass %d (err == nil)", i);
                     return NO;
                 }
                 
@@ -1169,6 +1266,22 @@ static NSRect FitAspectRectIntoRect(CGSize aspectSize, CGSize size)
     
     _renderTargetsNeedResize = YES;
     _historyNeedsInit        = YES;
+
+    if (getenv("OE_FILTER_CHAIN_DIAGNOSTICS") != NULL) {
+        // BOXER-FORK: report shader framebuffer formats once per successful load.
+        NSMutableString *formats = [NSMutableString stringWithFormat:@"formats: source=%@ | history=%@ | passes=%lu",
+                                     BXPixelFormatName(_sourceTexture ? _sourceTexture.pixelFormat : MTLPixelFormatInvalid),
+                                     BXPixelFormatName(MTLPixelFormatBGRA8Unorm),
+                                     (unsigned long)_passCount];
+        for (NSUInteger i = 0; i < _passCount; i++) {
+            ShaderPass *pass = _shader.passes[i];
+            [formats appendFormat:@" | p%lu=%@%@", (unsigned long)i,
+             BXPixelFormatName(_pass[i].bindings.format),
+             pass.isFeedback ? @"(feedback)" : @""];
+        }
+        [formats appendFormat:@" | final=%@", BXPixelFormatName(_pass[_lastPassIndex].bindings.format)];
+        BXShaderDiagLog(@"%@", formats);
+    }
     
     return YES;
 }

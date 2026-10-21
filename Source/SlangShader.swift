@@ -66,7 +66,7 @@ public final class SlangShader: NSObject {
         passes.reserveCapacity(specs.count)
         for (i, spec) in specs.enumerated() {
             guard let path = spec["shader"] as? String else { throw Errors.missingKey("shader") }
-            guard let shaderURL = URL(string: path, relativeTo: base) else { throw Errors.invalidURL(path) }
+            let shaderURL = URL(fileURLWithPath: path, relativeTo: base).standardizedFileURL
             passes.append(try ShaderPass(from: shaderURL, index: i, dictionary: spec))
         }
         
@@ -75,7 +75,7 @@ public final class SlangShader: NSObject {
             luts.reserveCapacity(textures.count)
             for (key, spec) in textures {
                 guard let path = spec["path"] as? String else { throw Errors.missingKey("path") }
-                guard let textureURL = URL(string: path, relativeTo: base) else { throw Errors.invalidURL(path) }
+                let textureURL = URL(fileURLWithPath: path, relativeTo: base).standardizedFileURL
                 luts.append(ShaderLUT(url: textureURL, name: key, dictionary: spec))
             }
         }

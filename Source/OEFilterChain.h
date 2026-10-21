@@ -51,6 +51,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setSourceRect:(CGRect)rect aspect:(CGSize)aspect;
 - (void)setDrawableSize:(CGSize)drawableSize;
 
+/// Overrides the final pass viewport until resetOutputViewport is called.
+- (void)setOutputViewport:(MTLViewport)viewport;
+- (void)resetOutputViewport;
+
+
 - (OEPixelBuffer *)newBufferWithFormat:(OEMTLPixelFormat)format height:(NSUInteger)height bytesPerRow:(NSUInteger)bytesPerRow;
 - (OEPixelBuffer *)newBufferWithFormat:(OEMTLPixelFormat)format height:(NSUInteger)height bytesPerRow:(NSUInteger)bytesPerRow bytes:(void *)pointer;
 

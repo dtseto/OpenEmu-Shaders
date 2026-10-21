@@ -29,12 +29,15 @@ import Foundation
 public final class SlangShader: NSObject {
     public enum Errors: LocalizedError {
         case missingKey(String)
+        case invalidURL(String)
         case parameterConflict(String)
         
         public var errorDescription: String? {
             switch self {
             case .missingKey(let key):
                 return String(format: NSLocalizedString("missing key '%@'", comment: "shader is missing expected key"), key)
+            case .invalidURL(let path):
+                return String(format: NSLocalizedString("invalid shader path '%@'", comment: "shader path is not a valid URL"), path)
             case .parameterConflict(let name):
                 return String(format: NSLocalizedString("conflicting definition for parameter '%@'",
                                                         comment: ""),
@@ -63,7 +66,8 @@ public final class SlangShader: NSObject {
         passes.reserveCapacity(specs.count)
         for (i, spec) in specs.enumerated() {
             guard let path = spec["shader"] as? String else { throw Errors.missingKey("shader") }
-            passes.append(try ShaderPass(from: URL(string: path, relativeTo: base)!, index: i, dictionary: spec))
+            guard let shaderURL = URL(string: path, relativeTo: base) else { throw Errors.invalidURL(path) }
+            passes.append(try ShaderPass(from: shaderURL, index: i, dictionary: spec))
         }
         
         // process lookup textures
@@ -71,7 +75,8 @@ public final class SlangShader: NSObject {
             luts.reserveCapacity(textures.count)
             for (key, spec) in textures {
                 guard let path = spec["path"] as? String else { throw Errors.missingKey("path") }
-                luts.append(ShaderLUT(url: URL(string: path, relativeTo: base)!, name: key, dictionary: spec))
+                guard let textureURL = URL(string: path, relativeTo: base) else { throw Errors.invalidURL(path) }
+                luts.append(ShaderLUT(url: textureURL, name: key, dictionary: spec))
             }
         }
         
@@ -136,25 +141,28 @@ public final class SlangShader: NSObject {
             }
         }
         
-        if defaultGroup == nil {
+        let resolvedDefaultGroup: ShaderParamGroup
+        if let existingDefaultGroup = defaultGroup {
+            resolvedDefaultGroup = existingDefaultGroup
+        } else {
             let pg = ShaderParamGroup(name: "default", desc: "", hidden: false)
             parameterGroups.insert(pg, at: 0)
-            defaultGroup = pg
+            resolvedDefaultGroup = pg
         }
         
         if parameterGroups.count > 1 {
             // collect the remaining parameters into the global group
-            defaultGroup!.parameters = parameters
+            resolvedDefaultGroup.parameters = parameters
                 .filter { $0.group.isEmpty }
                 .map {
-                    $0.group = defaultGroup!.desc
+                    $0.group = resolvedDefaultGroup.desc
                     return $0
             }
             
             // sort the primary list of parameters based on the groups
             parameters = parameterGroups.flatMap { $0.parameters }
         } else {
-            defaultGroup!.parameters = parameters
+            resolvedDefaultGroup.parameters = parameters
         }
     }
 }

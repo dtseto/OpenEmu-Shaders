@@ -75,7 +75,7 @@ public class ShaderConfigSerialization: NSObject {
             throw Errors.missingKey("shaders")
         }
         
-        if shaders < 0 {
+        if shaders <= 0 {
             throw Errors.zeroShaders
         }
         
